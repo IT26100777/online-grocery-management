@@ -1,3 +1,4 @@
+
 package com.grocery.onlinegrocerymanagement.controller;
 
 import com.grocery.onlinegrocerymanagement.model.Order;
@@ -209,6 +210,10 @@ public class CheckoutController {
                     phone,
                     address
             );
+
+            // Deduct all ordered products after order and delivery records are saved.
+            // Text-file writes are not transactional across files.
+            productService.deductStock(cart);
 
             redirectAttributes.addFlashAttribute(
                     "orderCount", createdOrders.size()

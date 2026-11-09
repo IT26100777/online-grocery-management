@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ProductService {
@@ -101,6 +102,35 @@ public class ProductService {
         if (removed) {
             saveProducts(products);
         }
+    }
+
+    // CHECKOUT - Deduct quantities in one products-file update.
+    // Caller must coordinate this with order persistence.
+    public synchronized void deductStock(Map<Integer, Integer> quantities) {
+        if (quantities == null || quantities.isEmpty()) {
+            throw new IllegalArgumentException("No products to deduct.");
+        }
+
+        List<Product> products = loadProducts();
+        for (Map.Entry<Integer, Integer> item : quantities.entrySet()) {
+            Integer requested = item.getValue();
+            if (requested == null || requested <= 0) {
+                throw new IllegalArgumentException("Invalid product quantity.");
+            }
+            Product matching = null;
+            for (Product product : products) {
+                if (product.getId() == item.getKey()) {
+                    matching = product;
+                    break;
+                }
+            }
+            if (matching == null || matching.getQuantity() < requested) {
+                throw new IllegalArgumentException(
+                        "A product is unavailable or has insufficient stock.");
+            }
+            matching.setQuantity(matching.getQuantity() - requested);
+        }
+        saveProducts(products);
     }
 
     // LOAD PRODUCTS FROM TEXT FILE
