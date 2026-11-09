@@ -1,4 +1,3 @@
-
 package com.grocery.onlinegrocerymanagement.controller;
 
 import com.grocery.onlinegrocerymanagement.model.Order;
@@ -9,6 +8,9 @@ import com.grocery.onlinegrocerymanagement.service.CustomerCheckoutLinkService;
 import com.grocery.onlinegrocerymanagement.service.OrderService;
 import com.grocery.onlinegrocerymanagement.service.ProductService;
 import com.grocery.onlinegrocerymanagement.service.RegistrationService;
+
+import jakarta.servlet.http.HttpSession;
+import java.util.UUID;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -31,6 +33,8 @@ import java.util.Map;
 @Controller
 @RequestMapping("/checkout")
 public class CheckoutController {
+
+    private static final String CHECKOUT_TOKEN_KEY = "greenmart.checkout.token";
 
     private final OrderService orderService;
     private final ProductService productService;
@@ -56,7 +60,8 @@ public class CheckoutController {
     @GetMapping
     public String checkoutPage(
             Authentication authentication,
-            Model model) {
+            Model model,
+            HttpSession session) {
 
         UserAccount account =
                 registrationService.findByUsername(
@@ -66,6 +71,13 @@ public class CheckoutController {
         if (account == null) {
             return "redirect:/";
         }
+
+        String token = (String) session.getAttribute(CHECKOUT_TOKEN_KEY);
+        if (token == null) {
+            token = UUID.randomUUID().toString();
+            session.setAttribute(CHECKOUT_TOKEN_KEY, token);
+        }
+        model.addAttribute("checkoutToken", token);
 
         model.addAttribute("username", account.getUsername());
         model.addAttribute("fullName", account.getFullName());
@@ -83,6 +95,9 @@ public class CheckoutController {
             @RequestParam(value = "quantity", required = false)
             List<Integer> quantities,
 
+            @RequestParam("checkoutToken")
+            String checkoutToken,
+
             @RequestParam("deliveryPhone")
             String deliveryPhone,
 
@@ -90,7 +105,17 @@ public class CheckoutController {
             String deliveryAddress,
 
             Authentication authentication,
+            HttpSession session,
             RedirectAttributes redirectAttributes) {
+
+        // Check and consume the token while holding the controller lock.
+        String expectedToken = (String) session.getAttribute(CHECKOUT_TOKEN_KEY);
+        if (expectedToken == null || !expectedToken.equals(checkoutToken)) {
+            redirectAttributes.addFlashAttribute("error",
+                    "Checkout was already submitted or expired. Review your orders before trying again.");
+            return "redirect:/checkout";
+        }
+        session.removeAttribute(CHECKOUT_TOKEN_KEY);
 
         try {
             if (productIds == null ||

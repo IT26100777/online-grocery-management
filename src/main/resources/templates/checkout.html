@@ -153,6 +153,8 @@
                   th:action="@{/checkout/place}"
                   method="post">
 
+                <input type="hidden" name="checkoutToken" th:value="${checkoutToken}">
+
                 <label>Full Name</label>
                 <input type="text"
                        th:value="${fullName}"
