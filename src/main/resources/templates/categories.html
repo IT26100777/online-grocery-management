@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Category Management - GreenMart</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f4;
+            margin: 0;
+            padding: 30px;
+            color: #263326;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            color: #247a40;
+            margin-top: 0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-add {
+            background-color: #27864b;
+        }
+
+        .btn-edit {
+            background-color: #2879bd;
+        }
+
+        .btn-delete {
+            background-color: #c83e3e;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+        }
+
+        th, td {
+            padding: 14px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background-color: #e6f3e9;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .actions form {
+            margin: 0;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .success {
+            background-color: #e3f5e8;
+            color: #176534;
+        }
+
+        .error {
+            background-color: #fde8e8;
+            color: #a32121;
+        }
+
+        .empty {
+            text-align: center;
+            color: #777;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Category Management</h1>
+
+        <a th:href="@{/categories/new}"
+           class="btn btn-add">
+            + Add Category
+        </a>
+    </div>
+
+    <p>Manage GreenMart grocery categories.</p>
+
+    <!-- Success Message -->
+    <div class="message success"
+         th:if="${success}"
+         th:text="${success}">
+    </div>
+
+    <!-- Error Message -->
+    <div class="message error"
+         th:if="${error}"
+         th:text="${error}">
+    </div>
+
+    <!-- Categories Table -->
+    <table>
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Category Name</th>
+            <th>Description</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+
+        <tbody>
+
+        <tr th:each="category : ${categories}">
+
+            <td th:text="${category.id}"></td>
+
+            <td th:text="${category.name}"></td>
+
+            <td th:text="${category.description}"></td>
+
+            <td>
+                <div class="actions">
+
+                    <!-- Edit Category -->
+                    <a class="btn btn-edit"
+                       th:href="@{/categories/edit/{id}(id=${category.id})}">
+                        Edit
+                    </a>
+
+                    <!-- Delete Category -->
+                    <form
+                            th:action="@{/categories/delete/{id}(id=${category.id})}"
+                            method="post"
+                            onsubmit="return confirm('Delete this category?');">
+
+                        <button type="submit"
+                                class="btn btn-delete">
+                            Delete
+                        </button>
+                    </form>
+
+                </div>
+            </td>
+
+        </tr>
+
+        <tr th:if="${#lists.isEmpty(categories)}">
+            <td colspan="4" class="empty">
+                No categories found. Add your first category!
+            </td>
+        </tr>
+
+        </tbody>
+    </table>
+
+</div>
+
+</body>
+</html>
