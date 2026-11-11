@@ -153,6 +153,8 @@
                   th:action="@{/checkout/place}"
                   method="post">
 
+                <input type="hidden" name="checkoutToken" th:value="${checkoutToken}">
+
                 <label>Full Name</label>
                 <input type="text"
                        th:value="${fullName}"
@@ -172,6 +174,13 @@
                           minlength="10"
                           maxlength="250"
                           required></textarea>
+
+                <label for="paymentMethod">Payment Method</label>
+                <select id="paymentMethod" name="paymentMethod" required
+                        style="width:100%;padding:13px;border:1px solid #cadccd;border-radius:10px;font:inherit;background:white;">
+                    <option value="Cash on Delivery">Cash on Delivery</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                </select>
 
                 <!-- JS inserts cart product IDs and quantities -->
                 <div id="orderInputs"></div>
@@ -202,7 +211,7 @@
 
             <p class="muted">
                 Orders will be placed with Pending status.
-                Payment is not connected yet.
+                Payment will be recorded with Pending status.
             </p>
 
         </section>
