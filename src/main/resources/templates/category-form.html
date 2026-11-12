@@ -1,0 +1,141 @@
+
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title th:text="${pageTitle} + ' - GreenMart'">
+        Category Form - GreenMart
+    </title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f4;
+            margin: 0;
+            padding: 30px;
+            color: #263326;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            background: white;
+            padding: 35px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            color: #247a40;
+            margin-top: 0;
+        }
+
+        label {
+            display: block;
+            margin-top: 20px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #27864b;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-save {
+            background-color: #27864b;
+        }
+
+        .btn-cancel {
+            background-color: #777;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1 th:text="${pageTitle}">Category Form</h1>
+
+    <p>Enter the category details below.</p>
+
+    <form th:action="${formAction}"
+          th:object="${category}"
+          method="post">
+
+        <!-- Category Name -->
+        <label for="name">Category Name</label>
+
+        <input type="text"
+               id="name"
+               th:field="*{name}"
+               placeholder="e.g. Fruits"
+               maxlength="100"
+               required>
+
+        <!-- Category Description -->
+        <label for="description">
+            Category Description
+        </label>
+
+        <textarea id="description"
+                  th:field="*{description}"
+                  placeholder="Enter category description"
+                  maxlength="500"></textarea>
+
+        <!-- Form Buttons -->
+        <div class="actions">
+
+            <button type="submit"
+                    class="btn btn-save">
+                Save Category
+            </button>
+
+            <a th:href="@{/categories}"
+               class="btn btn-cancel">
+                Cancel
+            </a>
+
+        </div>
+
+    </form>
+
+</div>
+
+</body>
+</html>
