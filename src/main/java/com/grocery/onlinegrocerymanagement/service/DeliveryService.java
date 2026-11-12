@@ -69,6 +69,19 @@ public class DeliveryService {
         return null;
     }
 
+    // Find delivery by Order ID
+    public synchronized Delivery getDeliveryByOrderId(int orderId) {
+
+        for (Delivery delivery : loadDeliveries()) {
+
+            if (delivery.getOrderId() == orderId) {
+                return delivery;
+            }
+        }
+
+        return null;
+    }
+
     // UPDATE - Update Delivery
     public synchronized void updateDelivery(
             int id, Delivery updatedDelivery) {

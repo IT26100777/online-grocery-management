@@ -132,159 +132,127 @@ public class CheckoutController {
         }
         session.removeAttribute(CHECKOUT_TOKEN_KEY);
 
-        try {
-            if (productIds == null ||
-                    quantities == null ||
-                    productIds.isEmpty() ||
-                    productIds.size() != quantities.size() ||
-                    productIds.size() > 30) {
+        List<Order> createdOrders = new ArrayList<>();
+        List<Integer> createdPaymentIds = new ArrayList<>();
+        List<Integer> createdDeliveryIds = new ArrayList<>();
+        Map<Integer, Integer> cart = new LinkedHashMap<>();
+        boolean stockDeducted = false;
 
-                throw new IllegalArgumentException(
-                        "Invalid shopping cart."
-                );
+        try {
+            if (productIds == null || quantities == null || productIds.isEmpty()
+                    || productIds.size() != quantities.size() || productIds.size() > 30) {
+                throw new IllegalArgumentException("Invalid shopping cart.");
             }
 
             String phone = clean(deliveryPhone);
             String address = clean(deliveryAddress);
-
             if (phone.length() < 7 || phone.length() > 25) {
-                throw new IllegalArgumentException(
-                        "Please enter a valid phone number."
-                );
+                throw new IllegalArgumentException("Please enter a valid phone number.");
             }
-
             if (address.length() < 10 || address.length() > 250) {
-                throw new IllegalArgumentException(
-                        "Address must contain 10 to 250 characters."
-                );
+                throw new IllegalArgumentException("Address must contain 10 to 250 characters.");
             }
-
             if (!"Cash on Delivery".equals(paymentMethod)
                     && !"Bank Transfer".equals(paymentMethod)) {
                 throw new IllegalArgumentException("Invalid payment method.");
             }
 
-            // Validate every item before saving orders
-            Map<Integer, Integer> cart = new LinkedHashMap<>();
-
             for (int i = 0; i < productIds.size(); i++) {
-
                 int productId = productIds.get(i);
                 int quantity = quantities.get(i);
-
-                if (quantity <= 0 ||
-                        cart.containsKey(productId)) {
-
-                    throw new IllegalArgumentException(
-                            "Invalid product quantity or duplicate item."
-                    );
+                if (quantity <= 0 || cart.containsKey(productId)) {
+                    throw new IllegalArgumentException("Invalid product quantity or duplicate item.");
                 }
-
-                Product product =
-                        productService.getProductById(productId);
-
-                if (product == null ||
-                        !Double.isFinite(product.getPrice()) ||
-                        product.getPrice() <= 0 ||
-                        quantity > product.getQuantity()) {
-
+                Product product = productService.getProductById(productId);
+                if (product == null || !Double.isFinite(product.getPrice())
+                        || product.getPrice() <= 0 || quantity > product.getQuantity()) {
                     throw new IllegalArgumentException(
-                            "A product is unavailable or has insufficient stock."
-                    );
+                            "A product is unavailable or has insufficient stock.");
                 }
-
                 cart.put(productId, quantity);
             }
 
-            // Get Customer ID using logged-in account
-            int customerId =
-                    customerLinkService.getCustomerId(
-                            authentication.getName()
-                    );
-
-            List<Order> createdOrders = new ArrayList<>();
+            int customerId = customerLinkService.getCustomerId(authentication.getName());
             double total = 0;
-
-            // Existing OrderService supports one product per order
-            for (Map.Entry<Integer, Integer> item :
-                    cart.entrySet()) {
-
+            for (Map.Entry<Integer, Integer> item : cart.entrySet()) {
                 Order order = new Order();
-
                 order.setCustomerId(customerId);
                 order.setProductId(item.getKey());
                 order.setQuantity(item.getValue());
-
-                // Recalculates price and sets Pending
                 orderService.addOrder(order);
-
                 createdOrders.add(order);
                 total += order.getTotalPrice();
             }
 
-            // Save separate delivery details
-            saveDeliveryDetails(
-                    customerId,
-                    createdOrders,
-                    phone,
-                    address
-            );
-
-            // Deduct all ordered products after order and delivery records are saved.
-            // Text-file writes are not transactional across files.
             productService.deductStock(cart);
+            stockDeducted = true;
 
-            // One payment record for each created order.
-            // A failure here may leave earlier file writes completed.
             for (Order order : createdOrders) {
                 Payment payment = new Payment();
                 payment.setOrderId(order.getId());
                 payment.setPaymentMethod(paymentMethod);
                 paymentService.addPayment(payment);
+                createdPaymentIds.add(payment.getId());
             }
 
-            // Create a Pending delivery for each order.
-            // The date is an estimate, two calendar days after checkout.
-            String estimatedDeliveryDate = LocalDate.now().plusDays(2).toString();
+            String estimatedDate = LocalDate.now().plusDays(2).toString();
             for (Order order : createdOrders) {
                 Delivery delivery = new Delivery();
                 delivery.setOrderId(order.getId());
                 delivery.setDeliveryAddress(address);
-                delivery.setDeliveryDate(estimatedDeliveryDate);
+                delivery.setDeliveryDate(estimatedDate);
                 deliveryService.addDelivery(delivery);
+                createdDeliveryIds.add(delivery.getId());
             }
 
-            redirectAttributes.addFlashAttribute(
-                    "orderCount", createdOrders.size()
-            );
+            // Append optional checkout details last to minimize partial writes.
+            saveDeliveryDetails(customerId, createdOrders, phone, address);
 
-            redirectAttributes.addFlashAttribute(
-                    "grandTotal", total
-            );
-
-            redirectAttributes.addFlashAttribute(
-                    "username", authentication.getName()
-            );
-
+            redirectAttributes.addFlashAttribute("orderCount", createdOrders.size());
+            redirectAttributes.addFlashAttribute("grandTotal", total);
+            redirectAttributes.addFlashAttribute("username", authentication.getName());
             return "redirect:/checkout/success";
 
-        } catch (IllegalArgumentException |
-                 IllegalStateException e) {
+        } catch (Exception failure) {
+            // Compensating actions are best-effort, NOT an atomic transaction.
+            // Only undo records created by THIS checkout attempt.
+            List<String> rollbackErrors = new ArrayList<>();
 
-            redirectAttributes.addFlashAttribute(
-                    "error", e.getMessage()
-            );
+            for (int i = createdDeliveryIds.size() - 1; i >= 0; i--) {
+                int id = createdDeliveryIds.get(i);
+                try { deliveryService.deleteDelivery(id); }
+                catch (RuntimeException e) { rollbackErrors.add("delivery " + id); }
+            }
+            for (int i = createdPaymentIds.size() - 1; i >= 0; i--) {
+                int id = createdPaymentIds.get(i);
+                try { paymentService.deletePayment(id); }
+                catch (RuntimeException e) { rollbackErrors.add("payment " + id); }
+            }
+            if (stockDeducted) {
+                for (Map.Entry<Integer, Integer> item : cart.entrySet()) {
+                    try { productService.restoreStock(item.getKey(), item.getValue()); }
+                    catch (RuntimeException e) { rollbackErrors.add("stock " + item.getKey()); }
+                }
+            }
+            for (int i = createdOrders.size() - 1; i >= 0; i--) {
+                int id = createdOrders.get(i).getId();
+                try { orderService.deleteOrder(id); }
+                catch (RuntimeException e) { rollbackErrors.add("order " + id); }
+            }
 
-            return "redirect:/checkout";
-
-        } catch (IOException e) {
-
-            redirectAttributes.addFlashAttribute(
-                    "error",
-                    "Delivery details could not be saved. " +
-                            "Please contact support before trying again."
-            );
-
+            if (!rollbackErrors.isEmpty()) {
+                System.err.println("CHECKOUT ROLLBACK INCOMPLETE: " + rollbackErrors);
+                failure.printStackTrace();
+                redirectAttributes.addFlashAttribute("error",
+                        "Checkout failed and some changes could not be reversed. "
+                                + "Contact an administrator; do not retry yet.");
+            } else {
+                System.err.println("Checkout failed; compensating rollback attempted: "
+                        + failure.getMessage());
+                redirectAttributes.addFlashAttribute("error",
+                        "Checkout failed: " + failure.getMessage()
+                                + " Review your orders before retrying.");
+            }
             return "redirect:/checkout";
         }
     }

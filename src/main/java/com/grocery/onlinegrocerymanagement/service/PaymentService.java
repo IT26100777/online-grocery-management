@@ -72,6 +72,18 @@ public class PaymentService {
         return null;
     }
 
+    // Find payment by Order ID
+    public synchronized Payment getPaymentByOrderId(int orderId) {
+
+        for (Payment payment : loadPayments()) {
+            if (payment.getOrderId() == orderId) {
+                return payment;
+            }
+        }
+
+        return null;
+    }
+
     // UPDATE - Update Payment
     public synchronized void updatePayment(
             int id, Payment updatedPayment) {
