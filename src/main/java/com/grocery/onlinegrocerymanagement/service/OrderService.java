@@ -18,6 +18,9 @@ public class OrderService {
     private final Path filePath =
             Paths.get("data", "orders.txt");
 
+    private final Path sequenceFilePath =
+            Paths.get("data", "order-id-sequence.txt");
+
     private final ProductService productService;
     private final CustomerService customerService;
 
@@ -34,21 +37,42 @@ public class OrderService {
 
         List<Order> orders = loadOrders();
 
-        int newId = 1;
+        // Read last allocated Order ID
+        int lastId = 0;
 
-        for (Order o : orders) {
-            if (o.getId() >= newId) {
-                newId = o.getId() + 1;
+        if (Files.exists(sequenceFilePath)) {
+            try {
+                String content = Files.readString(sequenceFilePath).trim();
+
+                if (!content.isEmpty()) {
+                    lastId = Integer.parseInt(content);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException("Error reading order ID sequence", e);
             }
         }
+
+        // Never reuse an ID present in current orders
+        for (Order existing : orders) {
+            lastId = Math.max(lastId, existing.getId());
+        }
+
+        int newId = Math.addExact(lastId, 1);
 
         order.setId(newId);
         order.setStatus("Pending");
 
         calculateTotal(order);
 
-        orders.add(order);
+        // Reserve ID before saving order
+        try {
+            Files.createDirectories(sequenceFilePath.getParent());
+            Files.writeString(sequenceFilePath, String.valueOf(newId));
+        } catch (IOException e) {
+            throw new RuntimeException("Error saving order ID sequence", e);
+        }
 
+        orders.add(order);
         saveOrders(orders);
     }
 
@@ -72,30 +96,68 @@ public class OrderService {
     }
 
     // UPDATE - Update Order
-    public synchronized void updateOrder(
-            int id, Order updatedOrder) {
+    public synchronized void updateOrder(int id, Order updatedOrder) {
 
         List<Order> orders = loadOrders();
 
         for (int i = 0; i < orders.size(); i++) {
 
-            if (orders.get(i).getId() == id) {
+            Order existingOrder = orders.get(i);
+
+            if (existingOrder.getId() == id) {
+
+                String oldStatus = existingOrder.getStatus();
+                String newStatus = updatedOrder.getStatus();
+
+                // Prevent changing product or quantity during status update
+                if (existingOrder.getProductId() != updatedOrder.getProductId()
+                        || existingOrder.getQuantity() != updatedOrder.getQuantity()
+                        || existingOrder.getCustomerId() != updatedOrder.getCustomerId()) {
+
+                    throw new IllegalArgumentException(
+                            "Cannot change customer, product or quantity during status update"
+                    );
+                }
+
+                if (newStatus == null || newStatus.isBlank()) {
+                    throw new IllegalArgumentException(
+                            "Order status is required"
+                    );
+                }
+
+                boolean wasCancelled =
+                        "Cancelled".equalsIgnoreCase(oldStatus);
+
+                boolean isCancelled =
+                        "Cancelled".equalsIgnoreCase(newStatus);
+
+                // Prevent reactivating an already cancelled order
+                if (wasCancelled && !isCancelled) {
+                    throw new IllegalArgumentException(
+                            "Cancelled orders cannot be reactivated"
+                    );
+                }
 
                 updatedOrder.setId(id);
 
                 calculateTotal(updatedOrder);
 
-                orders.set(i, updatedOrder);
+                // Restore stock only on first cancellation
+                if (!wasCancelled && isCancelled) {
+                    productService.restoreStock(
+                            existingOrder.getProductId(),
+                            existingOrder.getQuantity()
+                    );
+                }
 
+                orders.set(i, updatedOrder);
                 saveOrders(orders);
 
                 return;
             }
         }
 
-        throw new IllegalArgumentException(
-                "Order not found"
-        );
+        throw new IllegalArgumentException("Order not found");
     }
 
     // DELETE - Delete Order

@@ -133,6 +133,33 @@ public class ProductService {
         saveProducts(products);
     }
 
+    // Restore stock when an order is cancelled
+    public synchronized void restoreStock(int productId, int quantity) {
+
+        if (quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "Quantity must be greater than zero"
+            );
+        }
+
+        List<Product> products = loadProducts();
+
+        for (Product product : products) {
+
+            if (product.getId() == productId) {
+
+                product.setQuantity(
+                        Math.addExact(product.getQuantity(), quantity)
+                );
+
+                saveProducts(products);
+                return;
+            }
+        }
+
+        throw new IllegalArgumentException("Product not found");
+    }
+
     // LOAD PRODUCTS FROM TEXT FILE
     private List<Product> loadProducts() {
 
