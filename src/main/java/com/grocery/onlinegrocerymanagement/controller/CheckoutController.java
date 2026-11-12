@@ -205,6 +205,7 @@ public class CheckoutController {
                 createdDeliveryIds.add(delivery.getId());
             }
 
+
             // Append optional checkout details last to minimize partial writes.
             saveDeliveryDetails(customerId, createdOrders, phone, address);
 
